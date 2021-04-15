@@ -1,0 +1,430 @@
+---
+title: "Credit Risk Analysis"
+author: "Antonio Avila"
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r load data}
+library(tidyverse)
+library(skimr)
+library(caret)
+library(glmnet)
+library(elasticnet)
+library(gridExtra)
+
+credit_data <- read_csv('cleaned_german_data.csv')
+credit_data$credit_status <- as.factor(credit_data$credit_status)
+credit_data$employment_time <- fct_relevel(factor(credit_data$employment_time), c("unemployed", "< 1 year", "between 1 and 4 years", "between 4 and 7 years", "> 7 years"))
+credit_data$checking_acct <- fct_relevel(factor(credit_data$checking_acct), c("no checking", "<0", "between 0 and 200", ">200"))
+credit_data$savings_acct <- fct_relevel(factor(credit_data$savings_acct), c("none/unknown", "<100", "between 100 and 500", "between 500 and 1000", ">1000"))
+glimpse(credit_data)
+
+```
+
+```{r credit status distribution}
+credit_data %>%
+  ggplot(aes(credit_status, fill = credit_status)) + 
+    geom_bar(show.legend = FALSE)
+```
+
+
+```{r}
+# Credit amount vs number of months
+credit_data %>% ggplot(aes(months, credit_amount)) +
+  geom_point(aes(color = credit_status)) +
+  geom_smooth(se = FALSE) +
+  scale_color_manual(name = "Credit Status", labels = c("Bad", "Good"), values = c('red', 'black')) +
+  xlab('Term Length (in Months)') +
+  ylab('Credit Amount')
+
+
+# credit amount by credit status
+credit_data %>% ggplot(aes(credit_status, credit_amount)) +
+  geom_violin(aes(fill = credit_status), show.legend = FALSE)
+
+credit_data %>% ggplot(aes(credit_amount, color = credit_status)) +
+  geom_density()
+  
+credit_data %>% ggplot(aes(credit_status, log(credit_amount))) +
+  geom_violin(aes(fill = credit_status), show.legend = FALSE)
+
+
+credit_data %>% group_by(credit_status) %>% summarize(mean_amount = mean(credit_amount))
+t.test(log(credit_data$credit_amount) ~ credit_data$credit_status)
+
+
+# credit amount by number of months of loan
+credit_data %>% ggplot(aes(credit_status, log(months))) +
+  geom_violin(aes(fill = credit_status), show.legend = FALSE)
+
+credit_data %>% group_by(credit_status) %>% summarize(mean_months = mean(months))
+t.test(log(credit_data$months) ~ credit_data$credit_status)
+
+
+# Credit status by gender
+credit_data %>% ggplot(aes(sex, credit_status)) +
+  geom_jitter()
+credit_data %>% ggplot(aes(sex, fill = credit_status)) +
+  geom_bar(position = 'dodge') +
+  ggtitle("Credit Status by Gender") +
+  scale_fill_manual(name = "Credit Status", labels = c("Good", "Bad"), values = c('#00BFC4', '#F8766D'))
+
+status_by_gender <- credit_data %>% group_by(sex, credit_status) %>% summarise(count = n()) %>% mutate(percent = count/sum(count))
+status_by_gender %>% ggplot(aes(sex, percent, fill = credit_status)) + geom_bar(stat = 'identity', position = 'dodge')
+chisq.test(credit_data$sex, credit_data$credit_status)
+
+
+# Cred status by checking account status
+credit_data %>% group_by(credit_status, checking_acct) %>% summarise(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, checking_acct, fill = credit_status)) + geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(name = "Credit Status",  values = c('#F8766D', '#00BFC4'))
+chisq.test(credit_data$checking_acct, credit_data$credit_status)
+
+
+# Cred status by checking savings status
+credit_data %>% group_by(credit_status, savings_acct) %>% summarise(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, savings_acct, fill = credit_status)) + geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(name = "Credit Status",  values = c('#F8766D', '#00BFC4'))
+
+
+# Cred status by employment time
+credit_data %>% group_by(credit_status, employment_time) %>% summarise(n = n()) %>% mutate(percent = n/sum(n)) %>%
+  ggplot(aes(percent, employment_time, fill = credit_status)) + geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(name = "Credit Status",  values = c('#F8766D', '#00BFC4'))
+
+
+# Cred status by job 
+credit_data %>% group_by(credit_status, job) %>% summarise(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, job, fill = credit_status)) + geom_bar(position = "dodge", stat = "identity") +
+  scale_fill_manual(name = "Credit Status", values = c('#F8766D', '#00BFC4'))
+chisq.test(credit_data$job, credit_data$credit_status)
+
+
+# Cred Status by Purpose
+credit_data %>% group_by(credit_status, purpose) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, purpose, fill = credit_status)) +
+  geom_bar(stat = "identity", position = "dodge")
+chisq.test(credit_data$purpose, credit_data$credit_status, simulate.p.value = TRUE)
+
+#Cred Status by Co-Applicant
+credit_data %>% group_by(credit_status, coapplicant) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, coapplicant, fill = credit_status)) +
+  geom_bar(stat = "identity", position = "dodge")
+
+
+#Cred Status by Residence Time
+credit_data %>% group_by(credit_status, residence_time) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, factor(residence_time), fill = credit_status)) +
+  geom_bar(stat = "identity", position = "dodge")
+
+
+#Cred Status by Property
+credit_data %>% group_by(credit_status, property) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, property, fill = credit_status)) +
+  geom_bar(stat = "identity", position = "dodge")
+
+
+#Cred Status by Housing
+credit_data %>% group_by(credit_status, housing) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, housing, fill = credit_status)) +
+  geom_bar(stat = "identity", position = "dodge")
+
+
+#Cred Status by installment plans
+credit_data %>% group_by(credit_status, installment_plans) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, installment_plans, fill = credit_status)) +
+  geom_bar(stat = "identity", position = "dodge")
+
+
+#Cred Status by Housing
+credit_data %>% group_by(credit_status, housing) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, housing, fill = credit_status)) +
+  geom_bar(stat = "identity", position = "dodge")
+```
+
+- Relationship between the amount of credit received and the term length in months. Makes sense since bigger loans are easier to manage the longer the loan term is. 
+- People who have the credit status designation of bad seem to take out larger loans. This is confirmed from violin and density plot on both the normal and log credit amount scales. 
+  - a t-test also confirm people with bad credit credit tend to have higher loans on average
+- The percentage of women who tend to have bad credit is higher than the percentage of males with bad credit.
+  - Though it doesn't explicit prove the above statement, a chi-squared test shows there is a statistically significant relationship between the gender of a customer and their credit status at a significance level of 0.05
+  - Wonder why the reason behind this is. 
+- Some weird findings. People with little money in the checking accounts had bad credit , which was expected. On the other hand, the vast majority of people with no checking accounts held good credit  A bit of a paradox. Perhaps people with good credit did not need feel the need to or were required to report how much they had.
+  - we can see a similar trend happen with the customers' savings accounts
+- a customers time of employment reveals an expected trend. people who have been employed for a longer period of time tend to have a better credit status compared to people have been employed for less than a year or unemployed.
+- i expected to see people with bad credit to be lower skilled workers compared to those with good credit. Instead, they hold about equal values except foe the highest skilled workers. there is a noticeably larger uptick in bad credit statuses among the highly skilled residents. 
+
+
+    
+```{r Gender}
+
+# Gender by Credit Amount
+credit_data %>% group_by(sex) %>% summarize(average_amount = mean(credit_amount)) %>% 
+  ggplot(aes(sex, average_amount, fill = sex)) +
+    geom_bar(stat = "identity")
+
+credit_data %>% 
+  ggplot(aes(sex, log(credit_amount), fill = sex)) +
+    geom_violin()
+
+# Gender by occupation
+credit_data %>% group_by(sex, job) %>% summarize(n =n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(x = percent, y = job, fill = sex)) +
+  geom_bar(stat = "identity", position = 'dodge')
+chisq.test(credit_data$sex, credit_data$job)
+
+# Gender by Employment Time
+credit_data %>% group_by(sex, employment_time) %>% summarize(n =n()) %>% mutate(percent = n/sum(n)) %>% 
+ggplot(aes(percent, employment_time, fill = sex))+
+    geom_bar(stat = "identity", position = "dodge")
+
+# Gender by Checking account
+credit_data %>% group_by(sex, checking_acct) %>% summarise(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, checking_acct, fill = sex)) +
+    geom_bar(stat = "identity", position = "dodge")
+
+# Gender by Savings account
+credit_data %>% group_by(sex, savings_acct) %>% summarise(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, savings_acct, fill = sex)) +
+    geom_bar(stat = "identity", position = "dodge")
+
+# Gender by Purpose of Loan
+credit_data %>% group_by(sex, purpose) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, purpose, fill = sex)) +
+    geom_bar(stat = 'identity', position = 'dodge')
+
+# Gender by applicant type
+credit_data %>% group_by(sex, coapplicant) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, coapplicant, fill = sex)) +
+    geom_bar(stat = 'identity', position = 'dodge')
+
+#Gender by Age
+credit_data %>% ggplot(aes(sex, age, fill = sex)) +
+  geom_violin(show.legend = FALSE)
+
+# Gender by Housing
+credit_data %>% group_by(sex, housing) %>% summarize(n = n()) %>% mutate(percent = n/sum(n))
+
+# Gender by Foreign Worker status (delete)
+credit_data %>% group_by(sex, foreign_worker) %>% summarize(n = n()) %>% mutate(percent = n/sum(n))
+
+# Gender by Property owned  
+credit_data %>% group_by(sex, property) %>% summarize(n = n()) %>% mutate(percent = n/sum(n)) %>% 
+  ggplot(aes(percent, property, fill = sex)) + 
+  geom_bar(stat = 'identity', position = 'dodge')
+
+```
+    
+    
+- contrary to what i initially suspected, women actually have lower credit lines. Perhaps it is due to occupations and/or earn less
+    - as of the time the data was collected, women had a tendency to be at their job for a shorter amount of time than men. This could be accounted for many reasons such as more often changing jobs to get higher salaries or returning from maternity leave, etc. More info would be needed to determine.  Though their salaries could provide a hint if they were provided. 
+  -interestingly, females and males have about the same amount of money in both their checking and savings accounts, meaning for each interval chosen by the creator of the data, the percentage of males and females having that amount of money is approximately the same.
+- as far as the property claimed (assuming it is being used as collateral), women tend to claim more 
+  
+  
+```{r}
+credit_data %>% 
+  ggplot(aes(log(credit_amount), purpose, fill = sex)) +
+    geom_boxplot()
+```
+  
+  
+```{r k means clustering}
+set.seed(42)
+num_cols = c("months", "credit_amount", "installmt_percent_income", "residence_time", "age")
+km.out = kmeans(as.matrix(credit_data[, num_cols]), centers = 2, iter.max = 30, nstart = 10)
+gg1 <- credit_data %>% ggplot(aes(months, credit_amount, color = factor(km.out$cluster))) + geom_point() 
+gg2 <- credit_data %>% ggplot(aes(months, credit_amount, color = credit_status)) + geom_point() 
+grid.arrange(gg1, gg2, ncol = 2)
+```
+
+
+
+
+#------------------- Modeling Time -------------------------------------
+
+  
+```{r modeling time (basic model)}
+logit = glm(credit_status ~. -job -purpose, data = credit_data, family = "binomial")
+summary(logit)
+preds = predict(logit, type = "response")
+pred_target = if_else(preds >= 0.5, 'good', 'bad')
+confusionMatrix(factor(pred_target), credit_data$credit_status)
+```
+
+A basic logistic regression model with no regularization or feature selection yields mixed results. Although it has an accuracy score of 78.2% (which could be easily improved upon), it performs poorly classifying on the target of interest, people with bad credit. It accurately predicts whether someone has bad credit 53% of the time, we might as well flip a coin and save all the energy and effort.
+This is due to the imbalance of classes. 70% of total customers in the data had good credit while only 30% had bad credit. This causes the model to more easily be able to distinguish trends in the good credit class but due to the lower amount of data points in the bad credit class, it has difficulty picking up on its trends. 
+The problem will only be exacerbated when the data is split into training and testing classes since the there will be even less data points to train the model with. 
+Some potential work-arounds to working with imbalanced datasets include under-sampling and oversampling. 
+- under-sampling samples from the original data to create a balanced subsample.
+- oversampling creates/simulated new data points to scale up the unbalanced classes. 
+
+
+```{r partition data}
+
+set.seed(42)
+indices = createDataPartition(credit_data$credit_status, p = 0.8, list = FALSE)
+train_data = credit_data[indices,]
+test_data = credit_data[-indices,]
+
+```
+
+
+```{r logit model w/ lasso}
+#set up CV 
+# CV_Control <- trainControl(method = "repeatedcv", number = 10, repeats = 10, summaryFunction = twoClassSummary, 
+                             # classProbs = TRUE, alpha = 1)
+
+cols = c("age", "months", "checking_acct", "credit_amount", "employment_time", 
+         "job", "sex", "number_credits_at_bank", "credit_status", "foreign_worker")
+
+# fit model and optimize parameters
+set.seed(42)
+# logit_lasso <- train(factor(credit_status)~., data = train_data, method = "glmnet", trControl = CV_Control, metric = "ROC", tuneGrid = data.frame(.alpha = 1))
+logit_lasso <- cv.glmnet(model.matrix(credit_status~., data = train_data), train_data$credit_status, 
+                      family = "binomial", alpha = 1, type.measure = "auc", keep = TRUE)
+
+#ROC Curve
+# rocs <- roc.glmnet(logit_lasso$fit.preval, newy = train_data$credit_status)
+# best_lasso <- logit_lasso$index["min",]
+# plot(rocs[[best_lasso]], type = "l")
+# invisible(sapply(rocs, lines, col = "grey"))
+# lines(rocs[[best_lasso]], lwd = 2,col = "red")
+
+
+
+# training set prediction
+lasso_train_preds = as.data.frame(predict(logit_lasso, model.matrix(credit_status~., train_data), 
+                           s = "lambda.min", type = "response"))
+lasso_train_preds$cred_status = ifelse(lasso_train_preds > 0.5, 'good', 'bad')
+
+# predict on test set and check results
+lasso_preds_minl = as.data.frame(predict(logit_lasso, model.matrix(credit_status~., test_data), 
+                           s = "lambda.min", type = "response"))
+lasso_preds_minl$cred_status = ifelse(lasso_preds_minl > 0.5, 'good', 'bad')
+
+# predictions using most regularized lasso within 1 std dev of minimum lambda
+lasso_preds_reg = as.data.frame(predict(logit_lasso, model.matrix(credit_status~., test_data), 
+                           s = "lambda.1se", type = "response"))
+lasso_preds_reg$cred_status = ifelse(lasso_preds_reg > 0.5, 'good', 'bad')
+
+
+confusionMatrix(factor(lasso_train_preds$cred_status), train_data$credit_status)
+confusionMatrix(factor(lasso_preds_minl$cred_status), test_data$credit_status)
+confusionMatrix(factor(lasso_preds_reg$cred_status), test_data$credit_status)
+
+```
+
+
+
+
+```{r logit model w/ elasticnet}
+#set up CV 
+CV_Control <- trainControl(method = "repeatedcv", number = 10, repeats = 10, summaryFunction = twoClassSummary, 
+                             classProbs = TRUE)
+
+# fit model and optimize
+set.seed(42)
+logit_enet <- train(factor(credit_status)~., data = train_data, method = "glmnet", trControl = CV_Control, metric = "ROC")
+coef(logit_enet$finalModel, logit_enet$finalModel$lambdaOpt)
+
+# predict on test set and check results
+enet_preds = predict(logit_enet, subset(test_data, select = -credit_status), type = "prob")
+enet_preds$pred_status = ifelse(enet_preds$good > 0.5, 'good', 'bad')
+
+
+confusionMatrix(factor(enet_preds$pred_status), test_data$credit_status)
+
+```
+
+
+```{r undersampling with elastic net}
+
+#set up CV 
+CV_Control <- trainControl(method = "repeatedcv", number = 10, repeats = 10, summaryFunction = twoClassSummary, 
+                             classProbs = TRUE, sampling = "down")
+
+# fit model and optimize
+set.seed(42)
+logit_enet <- train(factor(credit_status)~. -job, data = train_data, method = "glmnet", trControl = CV_Control, metric = "ROC")
+coef(logit_enet$finalModel, logit_enet$finalModel$lambdaOpt)
+
+# predict on test set and check results
+enet_preds = predict(logit_enet, subset(test_data, select = -credit_status), type = "prob")
+enet_preds$pred_status = ifelse(enet_preds$good > 0.5, 'good', 'bad')
+
+confusionMatrix(factor(enet_preds$pred_status), test_data$credit_status)
+```
+
+
+
+```{r oversampling with elastic net}
+
+#set up CV 
+CV_Control <- trainControl(method = "repeatedcv", number = 10, repeats = 10, summaryFunction = twoClassSummary, 
+                             classProbs = TRUE, sampling = "up")
+
+# fit model and optimize
+set.seed(42)
+logit_enet <- train(factor(credit_status)~. -job, data = train_data, method = "glmnet", trControl = CV_Control, metric = "ROC")
+# coef(logit_enet$finalModel, logit_enet$finalModel$lambdaOpt)
+
+
+# predict on train set and check results 
+enet_train_preds = predict(logit_enet, subset(train_data, select = -credit_status), type = "prob")
+enet_train_preds$pred_status = ifelse(enet_train_preds$good > 0.5, 'good', 'bad')
+
+# predict on test set and check results 
+enet_preds = predict(logit_enet, subset(test_data, select = -credit_status), type = "prob")
+enet_preds$pred_status = ifelse(enet_preds$good > 0.5, 'good', 'bad')
+
+confusionMatrix(factor(enet_train_preds$pred_status), train_data$credit_status)
+confusionMatrix(factor(enet_preds$pred_status), test_data$credit_status)
+
+```
+
+
+```{r svm classifier with oversampling}
+
+CV_Control <- trainControl(method = "repeatedcv", number = 10, repeats = 10, sampling = "up",
+                           summaryFunction = twoClassSummary, classProbs = TRUE )
+
+
+cols = c("age", "months", "checking_acct", "credit_amount", "employment_time", 
+         "job", "sex", "number_credits_at_bank", "credit_status", "foreign_worker")
+
+#model
+set.seed(42)
+new_model <- train(factor(credit_status) ~ ., data = train_data[,cols], method = "glmnet", 
+                   trControl = CV_Control, metric = "accuracy")
+
+old_preds <- as.data.frame(predict(new_model, train_data[,-19], type = "prob" ) ) #, type = "prob")
+old_preds$cred_status <- ifelse(old_preds$good > 0.5, "good", "bad")
+
+
+new_preds <- as.data.frame(predict(new_model, test_data[,-19], type = "prob" )) #, type = "prob")
+new_preds$cred_status <- ifelse(new_preds$good > 0.5, "good", "bad")
+
+
+confusionMatrix(factor(old_preds$cred_status), train_data$credit_status)
+confusionMatrix(factor(new_preds$cred_status), test_data$credit_status)
+
+
+```
+
+
+
+```{r}
+
+cv_model <- function(train_data = NA, test_data = NA, model = "glmnet"){
+  CV_Control = trainControl(method = "repeatedcv", number = 10, repeats = 10)
+}
+
+
+```
+

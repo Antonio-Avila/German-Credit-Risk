@@ -1,0 +1,74 @@
+---
+title: "Data Cleanning"
+author: "Antonio Avila"
+output:
+  html_document:
+    df_print: paged
+editor_options:
+  chunk_output_type: console
+---
+
+
+
+```{r}
+library(tidyverse)
+library(skimr)
+messy_cedit_data <- read_csv('german_credit_data.csv', col_names = FALSE)
+```
+
+```{r name columns, include = FALSE}
+col_names = c('checking_acct', 'months', 'credit_history', 'purpose', "credit_amount", "savings_acct", "employment_time", "installmt_percent_income", "sex_marital_status", "coapplicant", "residence_time", "property", "age", "installment_plans",
+"housing", "number_credits_at_bank", "job", "num_ppl_liable", "phone", "foreign_worker", "credit_status")
+
+colnames(messy_cedit_data) <- col_names
+glimpse(messy_cedit_data)
+```
+
+```{r clean data, include=FALSE}
+clean_data <- messy_cedit_data
+
+clean_data$checking_acct <- clean_data$checking_acct %>% recode_factor(A11 = '<0', A12 = 'between 0 and 200', A13 = '>200', A14 = 'no checking')
+
+# credit history will be dropped. categories an unambiguous
+
+clean_data$purpose <- clean_data$purpose %>% recode(A40 = 'new car', A41 = 'used car', A42 = 'furniture/equipment', A43 = 'radio/TV', A44 = 'appliances', A45 = 'repairs', A46 = 'education', A47 = 'other', A48 = 'retraining', A49 = 'business', A410 = 'other')
+
+clean_data$savings_acct <- clean_data$savings_acct %>% recode_factor(A61 = '<100', A62 = 'between 100 and 500', A63 = 'between 500 and 1000', A64 = '>1000', A65=  'none/unknown')
+
+clean_data$employment_time <- clean_data$employment_time %>% recode_factor(A71 = 'unemployed', A72 = '< 1 year', A73 = 'between 1 and 4 years', A74 = 'between 4 and 7 years', A75 = '> 7 years')
+
+clean_data['sex'] <- clean_data$sex_marital_status %>% fct_collapse(male = c('A91', 'A93', 'A94'), female = c('A92', 'A95'))
+#remember to drop sex_marital_status
+#could not decouple sex and marital status since marital status categories were poorly coded and combined with gender
+
+clean_data$coapplicant <- clean_data$coapplicant %>% recode_factor(A101 = 'none', A102 = 'coapplicant', A103 = 'guarantor')
+
+# more apt name would be collateral
+clean_data$property <- clean_data$property %>% recode(A121 = 'real estate', A122 = 'life insurance', A123 = 'car/other', A124 = 'unknown/none')
+
+clean_data$installment_plans <- clean_data$installment_plans %>% recode(A141 = 'bank', A142 = 'stores', A143 = 'none')
+
+clean_data$housing <- clean_data$housing %>% recode_factor(A151 = 'rent', A152 = 'own', A153 = 'for free')
+
+clean_data$job <- clean_data$job %>% recode(A171 = 'unskilled nonresident', A172 = 'unskilled resident', A173 = 'skilled resident', A174 = 'highly skilled resident')
+
+clean_data$phone <- clean_data$phone %>% recode_factor(A191 = 'none/unknown', A192 = 'yes')
+
+clean_data$foreign_worker <- clean_data$foreign_worker %>% recode_factor(A201 = 'yes', A202 = "no")
+
+clean_data$credit_status <- clean_data$credit_status %>% recode_factor('1' = 'good', '2' = 'bad')
+
+clean_data <- clean_data %>% select(-credit_history, -sex_marital_status)
+
+glimpse(clean_data)
+```
+
+
+```{r}
+skim(clean_data)
+```
+
+```{r}
+write_csv(clean_data, 'cleaned_german_data.csv')
+```
+
