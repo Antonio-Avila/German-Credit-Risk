@@ -11,3 +11,13 @@ The dataset can be found at: https://archive.ics.uci.edu/ml/datasets/Statlog+%28
 
 
 ### _Approach:_
+The approach was simple.
+- Began by cleaning the original dataset and giving the categorical variables meaningful names and state levels.
+  - some information was lost due to discretization, for example, binning of numerical variables such as the amount of money in one's savings/checking account
+- EDA revealed a few trends and variables that might be helpful in predicting the probability a customer will default on a loan as well as some potential multicollinearity.
+- fitted a few simple models on the raw data to get a baseline
+  - led to poor performance
+- After some light feature engineering, it was time to address the most pressing issue
+
+#### The Problem
+Ideally, a bank wants to maximize its number of good customers while minimizing the number of bad customers. Due to the nature of the problem, this causes datasets like these to have highly imbalanced classes, e.g., there are over 2 times as many good than bad customers in the dataset. This is bad for training models since it encourages them to learn as much as possible from the larger class while learning next to nothing from the smaller class. There is not enough information on the lower class for the model to be able to accurately distinguish patterns between the 2 classes and be of actual use. Without 
