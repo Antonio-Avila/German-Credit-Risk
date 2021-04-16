@@ -5,5 +5,7 @@
 **_Goal:_** The goal of this project was to analyze a dataset containing the financial records of the bank's customers in order to predict whether a new customer would be considered "good" or "bad". This consideration is important since it gives us an insight into whether the potential customer is likely to repay their loan or default. To achieve this, we want to create a model to predict the probability a customer is likely to default on a loan instead of only predicting whether the customer will be a "good" or "bad" one. Assuming the model is adequate, this allows the lenders to spend less resources on the "good" customers who are likely to repay their loan and focus on the ones likely to default according to the model.
 
 
+The dataset can be found at: https://archive.ics.uci.edu/ml/datasets/Statlog+%28German+Credit+Data%29
 
-https://archive.ics.uci.edu/ml/datasets/Statlog+%28German+Credit+Data%29
+
+**_Approach:_**
