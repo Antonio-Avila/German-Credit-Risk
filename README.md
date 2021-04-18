@@ -21,6 +21,14 @@ The approach was simple.
 
 #### The Problem
 Ideally, a bank wants to maximize its number of good customers while minimizing the number of bad customers. Due to the nature of the problem, this causes datasets like these to have highly imbalanced classes, e.g., there are over 2 times as many good than bad customers in the dataset. This is bad for training models since it encourages them to learn as much as possible from the larger class while learning next to nothing from the smaller class. There is not enough information on the lower class for the model to be able to accurately distinguish patterns between the 2 classes and be of actual use. Without some way to balance the two classes, the model may appear to be performing well but in actuality it may be because of the imbalance classes. In the most extreme case, it may be predicting everything to be the in the larger class, and due to the higher number of cases, it may yield a decent accuracy score.
+
+It is incredibly important to solve this problem since it could be difference between a model taking on too many and approving an acceptable amount of those "bad" credit that will default on a loan. 
+
 There are a few different approaches to counteract this problem.
 - **Under-Sampling:** balances the classes by sampling from the larger class until we have an equal amount of cases in each class.
-- **Over-Sampling:** Scales "up" the smaller class by
+  - it has the disadvantage of loosing information due to "discarding" of samples
+  - it may not be a suitable choice if the number of observations in the smaller class is too small, not leaving enough data to train the model on
+- **Over-Sampling:** Scales "up" the smaller class by randomly sampling from them until there is an equal amount in each classes
+  - the disadvantage of this method is that because we have to sample from the smaller class to scale it up, there will very likely be multiple occurrences of the original observations, adding more weight to those observations
+- **Other Techniques:** There are other approaches to tackle the imbalanced classes problem
+utilizing a hybrid approach of combining under-sampling with the simulation of new data. Such methods include the *ROSE* and *SMOTE* algorithms.
